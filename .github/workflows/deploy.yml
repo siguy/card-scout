@@ -1,0 +1,49 @@
+name: Deploy Card Scout Backend to Cloud Run
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    name: Deploy to Google Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # =============================================================================
+    # COOPER'S CORNER: HOW TO DEPLOY WITHOUT SECRETS IN CODE?
+    # We use "GitHub Action Secrets"! These are secure, encrypted variables that you
+    # define on GitHub.com. They are never visible in the code, but GitHub's build
+    # servers read them dynamically to authenticate with Google Cloud and deploy!
+    # =============================================================================
+    
+    - name: Authenticate with Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Enable Google APIs
+      run: |
+        gcloud services enable \
+          artifactregistry.googleapis.com \
+          cloudbuild.googleapis.com \
+          run.googleapis.com \
+          --project=${{ secrets.GCP_PROJECT_ID }}
+
+    # Source-based builds handle compiling, Artifact Registry, and container packaging automatically!
+    - name: Build and Deploy to Google Cloud Run
+      run: |
+        gcloud run deploy card-scout \
+          --source . \
+          --platform managed \
+          --region us-east1 \
+          --allow-unauthenticated \
+          --project=${{ secrets.GCP_PROJECT_ID }} \
+          --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},EBAY_CLIENT_ID=${{ secrets.EBAY_CLIENT_ID }},EBAY_CLIENT_SECRET=${{ secrets.EBAY_CLIENT_SECRET }},EBAY_RU_NAME=${{ secrets.EBAY_RU_NAME }}"
