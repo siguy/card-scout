@@ -18,8 +18,10 @@ It's fragile — eBay can change the HTML and break us. Treat it that way.
 from __future__ import annotations
 
 import logging
+import random
 import re
 import statistics
+import time
 import urllib.parse
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -34,10 +36,51 @@ from .models import CardModel, CompSummary, HistoricalComp
 log = logging.getLogger("comp_engine")
 
 SOLD_URL = "https://www.ebay.com/sch/i.html"
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-)
+
+# Full browser-like header set. eBay 403s requests that look like Python
+# even when User-Agent is set — they also check Accept, sec-ch-ua, etc.
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
+        "image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"macOS"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
+_session: Optional[requests.Session] = None
+
+
+def _get_session() -> requests.Session:
+    """Persistent session — first request to ebay.com seeds cookies that
+    subsequent search requests need to avoid 403."""
+    global _session
+    if _session is not None:
+        return _session
+    s = requests.Session()
+    s.headers.update(BROWSER_HEADERS)
+    try:
+        s.get("https://www.ebay.com/", timeout=10)
+    except requests.RequestException as exc:
+        log.warning("session warm-up failed: %s", exc)
+    _session = s
+    return s
+
 
 
 def _build_query(card: CardModel) -> str:
@@ -76,8 +119,37 @@ def _parse_date(text: str) -> Optional[datetime]:
     return None
 
 
-def fetch_sold_listings(query: str, lookback_days: int) -> List[HistoricalComp]:
-    """Scrapes eBay's sold/completed search page for a query."""
+def _fetch_with_retry(url: str, max_attempts: int = 3) -> Optional[requests.Response]:
+    """GET with full browser headers + persistent session + backoff.
+    Returns None if we ultimately fail; the caller decides what to do."""
+    session = _get_session()
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # Random jitter so we don't hammer at predictable intervals.
+            time.sleep(random.uniform(0.6, 1.4))
+            resp = session.get(url, timeout=15)
+        except requests.RequestException as exc:
+            log.warning("comp request error (attempt %d): %s", attempt, exc)
+            continue
+        if resp.status_code == 200:
+            return resp
+        if resp.status_code in (429, 503):
+            backoff = 2 ** attempt + random.random()
+            log.warning("comp request %s; backing off %.1fs", resp.status_code, backoff)
+            time.sleep(backoff)
+            continue
+        if resp.status_code == 403:
+            log.warning("comp request 403 (attempt %d). May be bot-blocked.", attempt)
+            # Drop the session so next attempt gets a fresh cookie warm-up.
+            global _session
+            _session = None
+            continue
+        log.warning("comp request unexpected status %s", resp.status_code)
+        return None
+    return None
+
+
+def _fetch_from_ebay(query: str, lookback_days: int) -> List[HistoricalComp]:
     params = {
         "_nkw": query,
         "_sacat": "0",
@@ -86,10 +158,10 @@ def fetch_sold_listings(query: str, lookback_days: int) -> List[HistoricalComp]:
         "_ipg": "60",
     }
     url = f"{SOLD_URL}?{urllib.parse.urlencode(params)}"
-    headers = {"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9"}
-    log.info("scraping comps: %s", query)
-    resp = requests.get(url, headers=headers, timeout=15)
-    resp.raise_for_status()
+    log.info("scraping eBay sold comps: %s", query)
+    resp = _fetch_with_retry(url)
+    if resp is None:
+        return []
 
     soup = BeautifulSoup(resp.text, "lxml")
     cutoff = datetime.utcnow() - timedelta(days=lookback_days)
@@ -125,6 +197,15 @@ def fetch_sold_listings(query: str, lookback_days: int) -> List[HistoricalComp]:
         )
     log.info("found %d comps for %r", len(comps), query)
     return comps
+
+
+def fetch_sold_listings(query: str, lookback_days: int) -> List[HistoricalComp]:
+    """Public entry. Tries eBay first; future fallback sources can chain here.
+
+    If eBay returns 403 consistently (bot detection), see TODO.md — the next
+    step is wiring 130point.com as a secondary source.
+    """
+    return _fetch_from_ebay(query, lookback_days)
 
 
 def _drop_outliers(prices: List[float]) -> List[float]:
