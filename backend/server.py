@@ -65,7 +65,15 @@ async def continuous_market_scout_loop():
 
 @app.on_event("startup")
 async def startup_event():
-    """Starts the background scouting thread when Cloud Run container boots up."""
+    """Starts the background scouting thread and verifies eBay API credentials on startup."""
+    logging.info("🛰️ CLOUD STARTUP: Performing boot diagnostics...")
+    from ebay_client import EbayClient
+    ebay = EbayClient()
+    connected = ebay.authenticate()
+    if connected:
+        logging.info(f"✅ CLOUD STARTUP DIAGNOSTICS: eBay Developer API is connected in [{ebay.env_name}] mode!")
+    else:
+        logging.error("❌ CLOUD STARTUP DIAGNOSTICS: eBay Developer API credentials failed. Check your environment keys.")
     asyncio.create_task(continuous_market_scout_loop())
 
 @app.get("/")
