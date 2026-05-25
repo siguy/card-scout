@@ -46,4 +46,5 @@ class DetectedDeal(pydantic.BaseModel):
     max_bid: float  # Absolute ceiling price honoring target profit margin
     target_bid: float  # The optimal starting bid/sniping price
     status: str = "Detected"  # "Detected", "Approved", "Sniped", "Missed", "Ignored"
+    explainer: Optional[str] = None
     created_at: datetime = pydantic.Field(default_factory=datetime.now)

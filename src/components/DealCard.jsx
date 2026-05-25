@@ -1,12 +1,31 @@
-import React from 'react';
-import { Clock, Info, ArrowUpRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { Clock, Info, ArrowUpRight, Award, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export default function DealCard({ deal, targetMargin, onSelectComps }) {
+export default function DealCard({ 
+  deal, 
+  targetMargin, 
+  maxBidLimit, 
+  dailyBudget, 
+  onSelectComps 
+}) {
+  const [showExplainer, setShowExplainer] = useState(true);
   const maxBidCeiling = deal.fmv * (1 - targetMargin) - deal.shippingCost;
-  const isDealApproved = deal.currentPrice <= maxBidCeiling;
+  
+  // Dynamic Budget validation
+  const isMarginApproved = deal.currentPrice <= maxBidCeiling;
+  const isWithinCardLimit = deal.currentPrice <= maxBidLimit;
+  const isWithinDailyBudget = deal.currentPrice <= dailyBudget;
+  const isDealApproved = isMarginApproved && isWithinCardLimit && isWithinDailyBudget;
+  
+  // Cooper's independent scouting cap
+  const isCooperFriendly = deal.currentPrice <= 300;
+
   const discountPercentage = ((deal.fmv - deal.currentPrice) / deal.fmv) * 100;
-  const projectedMargin = deal.fmv - deal.currentPrice - deal.shippingCost;
+  
+  // Calculate exact reselling margins dynamically for the card display
+  const ebayFee = deal.fmv * 0.13;
+  const projectedNetProfit = deal.fmv - deal.currentPrice - deal.shippingCost - ebayFee;
 
   const formatTime = (seconds) => {
     if (seconds <= 0) return "Auction Ended";
@@ -27,17 +46,32 @@ export default function DealCard({ deal, targetMargin, onSelectComps }) {
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.3 }}
       className={`glass-panel-interactive rounded-3xl p-6 flex flex-col md:flex-row gap-6 relative overflow-hidden ${
-        isDealApproved ? 'border-emerald-500/20' : 'border-white/5'
+        isDealApproved ? 'border-emerald-500/20 shadow-md shadow-emerald-500/5' : 'border-white/5'
       }`}
     >
-      {/* Deal Ribbon / Status indicator */}
-      <div className="absolute top-4 right-4 flex gap-2">
-        <span className={`text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full ${
+      {/* Deal Ribbon / Status indicators */}
+      <div className="absolute top-4 right-4 flex flex-wrap gap-2 max-w-[240px] justify-end z-20">
+        {isCooperFriendly && isMarginApproved && (
+          <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm shadow-cyan-500/5">
+            👦 COOPER VALUE
+          </span>
+        )}
+        <span className={`text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full border ${
           isDealApproved 
-            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-            : 'bg-slate-800/50 text-slate-400 border border-white/5'
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+            : !isWithinCardLimit 
+            ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 shadow-sm shadow-rose-500/5'
+            : !isWithinDailyBudget
+            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-sm shadow-amber-500/5'
+            : 'bg-slate-800/50 text-slate-400 border-white/5'
         }`}>
-          {isDealApproved ? "APPROVED SNIPE" : "WATCH LIST"}
+          {isDealApproved 
+            ? "APPROVED SNIPE" 
+            : !isWithinCardLimit 
+            ? "EXCEEDS CARD LIMIT" 
+            : !isWithinDailyBudget 
+            ? "EXCEEDS DAILY BUDGET" 
+            : "WATCH LIST"}
         </span>
         {deal.status === "secured" && (
           <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
@@ -74,39 +108,76 @@ export default function DealCard({ deal, targetMargin, onSelectComps }) {
           </h3>
           
           {/* Financial Analysis Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-wider text-slate-400">Current Price</span>
-              <span className="text-lg font-bold text-white mt-0.5">
+              <span className="text-base font-bold text-white mt-0.5">
                 ${deal.currentPrice.toLocaleString([], { minimumFractionDigits: 2 })}
               </span>
             </div>
             
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-wider text-slate-400">Calculated FMV</span>
-              <span className="text-lg font-bold text-indigo-300 mt-0.5">
+              <span className="text-base font-bold text-indigo-300 mt-0.5">
                 ${deal.fmv.toLocaleString([], { minimumFractionDigits: 2 })}
               </span>
             </div>
 
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-wider text-slate-400">Max Bid Limit</span>
-              <span className="text-lg font-bold text-slate-200 mt-0.5">
+              <span className="text-base font-bold text-slate-200 mt-0.5">
                 ${maxBidCeiling.toLocaleString([], { minimumFractionDigits: 2 })}
               </span>
             </div>
 
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Est. Profit</span>
-              <span className={`text-lg font-bold mt-0.5 ${isDealApproved ? 'text-emerald-400' : 'text-slate-400'}`}>
-                ${projectedMargin.toLocaleString([], { minimumFractionDigits: 2 })}
+              <span className="text-[10px] uppercase tracking-wider text-slate-400">Net Profit (Post-Fee)</span>
+              <span className={`text-base font-bold mt-0.5 ${isDealApproved ? 'text-emerald-400' : 'text-slate-400'}`}>
+                ${projectedNetProfit.toLocaleString([], { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>
         </div>
 
+        {/* Dynamic Strategy Explainer Section */}
+        {deal.explainer && (
+          <div className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl" />
+            
+            <button 
+              type="button"
+              onClick={() => setShowExplainer(!showExplainer)}
+              className="flex justify-between items-center w-full text-left"
+            >
+              <h4 className="text-xs uppercase tracking-wider font-bold text-indigo-300 flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5" />
+                💡 Scout Strategy Explainer
+              </h4>
+              <span className="text-slate-500 hover:text-white transition-all">
+                {showExplainer ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+
+            <AnimatePresence>
+              {showExplainer && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                    {deal.explainer}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Interactive Buttons footer */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-6 pt-4 border-t border-white/5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-5 pt-4 border-t border-white/5">
           <div className="flex items-center gap-3">
             <Clock className="h-4 w-4 text-slate-400" />
             <span className="text-xs text-slate-400 flex items-center gap-1.5">
@@ -123,7 +194,7 @@ export default function DealCard({ deal, targetMargin, onSelectComps }) {
               onClick={() => onSelectComps(deal)}
               className="bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 hover:text-white rounded-2xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-all"
             >
-              <Info className="h-3.5 w-3.5" />
+              <Award className="h-3.5 w-3.5" />
               View Comps
             </button>
             

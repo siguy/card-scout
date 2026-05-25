@@ -110,7 +110,10 @@ const INITIAL_SCOUT_DEALS = [
 
 export default function App() {
   const [deals, setDeals] = useState(INITIAL_SCOUT_DEALS);
-  const [targetMargin, setTargetMargin] = useState(0.20);
+  const [targetMargin, setTargetMargin] = useState(0.28); // Default 28% margin as requested by Cooper!
+  const [maxBidLimit, setMaxBidLimit] = useState(5000); // Default Whale limit
+  const [dailyBudget, setDailyBudget] = useState(5000); // Default daily budget
+  const [budgetPreset, setBudgetPreset] = useState("whale"); // "cooper", "whale", "custom"
   const [selectedDealComps, setSelectedDealComps] = useState(null);
   const [monitoredRoster, setMonitoredRoster] = useState([
     "LeBron James", "Michael Jordan", "Stephen Curry", "Victor Wembanyama", "Kobe Bryant", "Luka Doncic", "Nikola Jokic", 
@@ -120,6 +123,19 @@ export default function App() {
   const [sniperLogs, setSniperLogs] = useState([]);
   const [sniperTimer, setSniperTimer] = useState(24);
   const [sniperState, setSniperState] = useState("waiting");
+
+  const applyBudgetPreset = (preset) => {
+    setBudgetPreset(preset);
+    if (preset === "cooper") {
+      setMaxBidLimit(300);
+      setDailyBudget(300);
+      addLog("👦 Preset Activated: Cooper Mode ($300 limit per card).");
+    } else if (preset === "whale") {
+      setMaxBidLimit(5000);
+      setDailyBudget(5000);
+      addLog("🐋 Preset Activated: Whale Hunter Mode ($5,000 limit per card).");
+    }
+  };
 
   // Dynamic live API fetching from our Google Cloud Run Service!
   useEffect(() => {
@@ -146,6 +162,7 @@ export default function App() {
               endTimeSeconds: d.listing.listing_id === "ebay-103" ? sniperTimer : 300,
               imageUrl: d.listing.image_url || "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=600",
               url: d.listing.url,
+              explainer: d.explainer || null,
               comps: [
                 { price: d.fair_market_value * 1.02, date: "3 days ago", source: "eBay Sold" },
                 { price: d.fair_market_value * 0.98, date: "8 days ago", source: "Card Ladder" },
@@ -230,7 +247,10 @@ export default function App() {
     addLog(`📉 Removed ${player} from monitored roster.`);
   };
 
-  const approvedDeals = deals.filter(d => (d.fmv * (1 - targetMargin) - d.shippingCost) >= d.currentPrice);
+  const approvedDeals = deals.filter(d => {
+    const maxBidCeiling = d.fmv * (1 - targetMargin) - d.shippingCost;
+    return d.currentPrice <= maxBidCeiling && d.currentPrice <= maxBidLimit && d.currentPrice <= dailyBudget;
+  });
 
   return (
     <div className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto">
@@ -240,6 +260,12 @@ export default function App() {
         <Controls 
           targetMargin={targetMargin}
           setTargetMargin={setTargetMargin}
+          maxBidLimit={maxBidLimit}
+          setMaxBidLimit={setMaxBidLimit}
+          dailyBudget={dailyBudget}
+          setDailyBudget={setDailyBudget}
+          budgetPreset={budgetPreset}
+          applyBudgetPreset={applyBudgetPreset}
           monitoredRoster={monitoredRoster}
           newPlayerInput={newPlayerInput}
           setNewPlayerInput={setNewPlayerInput}
@@ -263,6 +289,8 @@ export default function App() {
                   key={deal.id}
                   deal={deal}
                   targetMargin={targetMargin}
+                  maxBidLimit={maxBidLimit}
+                  dailyBudget={dailyBudget}
                   onSelectComps={setSelectedDealComps}
                 />
               ))}
