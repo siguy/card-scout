@@ -1,0 +1,40 @@
+# Card Scout configuration.
+
+# A listing is flagged as a "deal" if its (price + shipping) is at least
+# this fraction below the median of recent sold comps.
+target_margin: 0.30
+
+# Comp engine settings.
+comps:
+  # Window of recent sold listings to consider.
+  lookback_days: 90
+  # Minimum number of comps required to trust a fair-value estimate.
+  min_comps: 5
+  # Maximum allowed (stdev / median) ratio. Above this we mark confidence as low
+  # and never auto-flag as a deal regardless of discount.
+  max_cv: 0.35
+  # Comp scrape requests are slow; cache results for this many minutes.
+  cache_minutes: 60
+
+# Risk controls.
+risk:
+  # Hard cap on any single bid we'll suggest, regardless of FMV.
+  max_bid_per_card: 5000
+  # Soft cap on combined approved-bid value per rolling 24h.
+  daily_budget: 5000
+
+# Ingestor: how often we poll eBay for live auctions.
+ingestor:
+  poll_seconds: 120
+  # Per-query limit on active listings returned by eBay Browse API.
+  per_query_limit: 10
+  # Only consider auction-style listings with at most this many seconds remaining.
+  # (We don't care about auctions ending in 6 days; we care about ones we could snipe.)
+  max_seconds_remaining: 172800   # 48h
+
+# Sniper.
+sniper:
+  # Mode: "manual" (recommended for v1) or "gixen" (requires Gixen account, stubbed).
+  mode: manual
+  # Lead time before auction close to ping the user for a manual snipe.
+  ping_seconds_before_close: 60

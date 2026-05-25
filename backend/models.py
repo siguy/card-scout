@@ -1,50 +1,83 @@
-import pydantic
-from typing import Optional, List
+"""Data shapes shared across the Card Scout pipeline.
+
+A note on identity (for Cooper): two cards are "the same card" if they match on
+player + year + brand + card_type + grade. That tuple is what we use to pull
+comps and to value a listing. If we get it wrong, the FMV will be wrong.
+"""
 from datetime import datetime
+from typing import List, Optional
+
+import pydantic
+
 
 class CardModel(pydantic.BaseModel):
-    """Represents the unique characteristics of a sports card."""
+    """The thing that's actually being sold, normalized."""
     player_name: str
     year: int
-    brand: str  # e.g., "Panini Prizm", "Fleer", "Topps Chrome", "Upper Deck"
-    card_type: str  # e.g., "Base", "Silver Prizm", "Rookie Card", "Autograph", "Jersey Patch"
+    brand: str               # e.g. "Panini Prizm", "Topps Chrome", "Fleer"
+    card_type: str           # e.g. "Base", "Silver Prizm", "Rookie", "Refractor Rookie"
     graded: bool
-    grader: Optional[str] = None  # e.g., "PSA", "BGS", "SGC"
-    grade: Optional[float] = None  # e.g., 10.0, 9.5, 9.0, 8.5
+    grader: Optional[str] = None      # "PSA" | "BGS" | "SGC"
+    grade: Optional[float] = None     # 10.0, 9.5, ...
 
-    def get_identifier(self) -> str:
-        """Generates a clean string key representing the card specifications."""
-        grade_str = f" {self.grader} {self.grade}" if self.graded else " Raw"
-        return f"{self.year} {self.brand} {self.player_name} {self.card_type}{grade_str}"
+    def identifier(self) -> str:
+        grade = f" {self.grader} {self.grade}" if self.graded else " Raw"
+        return f"{self.year} {self.brand} {self.player_name} {self.card_type}{grade}"
+
+    def comp_key(self) -> str:
+        """Stable cache key for comp lookups."""
+        return self.identifier().lower()
+
 
 class HistoricalComp(pydantic.BaseModel):
-    """Represents a completed past sale used for valuation valuation/comparables (comps)."""
-    card: CardModel
+    """A single past sale used to anchor fair-market value."""
     sale_price: float
     sale_date: datetime
-    source: str  # e.g., "eBay Sold", "Card Ladder"
+    title: str
     url: Optional[str] = None
+    source: str = "eBay Sold"
+
+
+class CompSummary(pydantic.BaseModel):
+    """Aggregated comp stats for a card."""
+    n: int
+    median: float
+    mean: float
+    stdev: float
+    cv: float                          # coefficient of variation = stdev/median
+    confidence: str                    # "high" | "low" | "none"
+    samples: List[HistoricalComp] = []
+
 
 class ActiveListing(pydantic.BaseModel):
-    """Represents a live card listed for sale (auction or buy-it-now)."""
     listing_id: str
     title: str
     card: CardModel
     current_price: float
-    buy_it_now: bool
-    end_time: datetime  # Critical for sniper to know when the final 15s starts
-    shipping_cost: float
+    shipping_cost: float = 0.0
+    buy_it_now: bool = False
+    end_time: Optional[datetime] = None   # may be None for BIN
     url: str
     image_url: Optional[str] = None
 
+
 class DetectedDeal(pydantic.BaseModel):
-    """Represents an active listing identified as an arbitrage opportunity."""
     deal_id: str
     listing: ActiveListing
     fair_market_value: float
-    estimated_margin: float  # e.g. 0.25 for 25% discount
-    max_bid: float  # Absolute ceiling price honoring target profit margin
-    target_bid: float  # The optimal starting bid/sniping price
-    status: str = "Detected"  # "Detected", "Approved", "Sniped", "Missed", "Ignored"
+    comps: CompSummary
+    discount: float                    # (fmv - (price+shipping)) / fmv
+    max_bid: float                     # ceiling honoring target margin
+    status: str = "detected"           # detected | approved | rejected | snipe_queued | won | lost | expired
     explainer: Optional[str] = None
-    created_at: datetime = pydantic.Field(default_factory=datetime.now)
+    created_at: datetime = pydantic.Field(default_factory=datetime.utcnow)
+
+
+class BidOutcome(pydantic.BaseModel):
+    """What actually happened. Feeds the self-improvement loop."""
+    deal_id: str
+    placed_bid: Optional[float] = None
+    won: Optional[bool] = None
+    final_price: Optional[float] = None
+    notes: Optional[str] = None
+    recorded_at: datetime = pydantic.Field(default_factory=datetime.utcnow)
