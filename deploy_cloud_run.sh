@@ -16,9 +16,13 @@ echo "🚀 CARD SCOUT: Initializing Google Cloud Run Deployment..."
 echo "📍 Target GCP Project: $PROJECT_ID"
 echo "📍 Region: $REGION"
 
-# 1. Read API Key from local .env file
+# 1. Read API Key and eBay credentials from local .env file
 if [ -f .env ]; then
     API_KEY=$(grep GEMINI_API_KEY .env | head -n 1 | cut -d '=' -f2 | tr -d '\r\n ')
+    EBAY_CLIENT_ID=$(grep EBAY_CLIENT_ID .env | head -n 1 | cut -d '=' -f2 | tr -d '\r\n ')
+    EBAY_CLIENT_SECRET=$(grep EBAY_CLIENT_SECRET .env | head -n 1 | cut -d '=' -f2 | tr -d '\r\n ')
+    EBAY_RU_NAME=$(grep EBAY_RU_NAME .env | head -n 1 | cut -d '=' -f2 | tr -d '\r\n ')
+    
     if [ "$API_KEY" = "PASTE_YOUR_GEMINI_API_KEY_HERE" ] || [ -z "$API_KEY" ]; then
         echo "❌ ERROR: Please paste your real GEMINI_API_KEY in your local .env file before deploying!"
         exit 1
@@ -48,7 +52,7 @@ gcloud run deploy $SERVICE_NAME \
     --region $REGION \
     --allow-unauthenticated \
     --project=$PROJECT_ID \
-    --set-env-vars="GEMINI_API_KEY=$API_KEY"
+    --set-env-vars="GEMINI_API_KEY=$API_KEY,EBAY_CLIENT_ID=$EBAY_CLIENT_ID,EBAY_CLIENT_SECRET=$EBAY_CLIENT_SECRET,EBAY_RU_NAME=$EBAY_RU_NAME"
 
 echo "============================================================================="
 echo "🎉 SUCCESS: Card Scout Cloud Backend successfully deployed to Google Cloud Run!"
