@@ -1,263 +1,202 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { TrendingUp, RefreshCw, AlertTriangle } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
-// Component imports
 import Header from './components/Header';
 import Controls from './components/Controls';
 import DealCard from './components/DealCard';
 import SniperShell from './components/SniperShell';
 import CompsModal from './components/CompsModal';
 
-const INITIAL_SCOUT_DEALS = [
-  {
-    id: "ebay-103",
-    player: "Michael Jordan",
-    year: 1986,
-    brand: "Fleer",
-    type: "Rookie Card",
-    graded: true,
-    grader: "PSA",
-    grade: 8.0,
-    title: "1986 Fleer Michael Jordan Rookie Card RC #57 PSA 8 NM-MT - Beautiful Centering",
-    currentPrice: 4150.00,
-    shippingCost: 25.00,
-    fmv: 6200.00,
-    endTimeSeconds: 24,
-    imageUrl: "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=600&q=80",
-    url: "https://www.ebay.com/itm/111000103",
-    comps: [
-      { price: 6350.00, date: "3 days ago", source: "eBay Sold" },
-      { price: 6100.00, date: "10 days ago", source: "PWCC Vault" },
-      { price: 6400.00, date: "15 days ago", source: "Goldin Auctions" },
-      { price: 5950.00, date: "24 days ago", source: "eBay Sold" },
-      { price: 6200.00, date: "1 month ago", source: "Card Ladder" }
-    ]
-  },
-  {
-    id: "ebay-101",
-    player: "LeBron James",
-    year: 2003,
-    brand: "Topps Chrome",
-    type: "Rookie Card",
-    graded: true,
-    grader: "PSA",
-    grade: 10.0,
-    title: "2003 Topps Chrome LeBron James #111 ROOKIE RC PSA 10 GEM MINT L@@K!",
-    currentPrice: 6950.00,
-    shippingCost: 15.00,
-    fmv: 9500.00,
-    endTimeSeconds: 240,
-    imageUrl: "https://images.unsplash.com/photo-1519766304817-4f37bda74a27?auto=format&fit=crop&w=600&q=80",
-    url: "https://www.ebay.com/itm/111000101",
-    comps: [
-      { price: 9700.00, date: "1 day ago", source: "eBay Sold" },
-      { price: 9400.00, date: "6 days ago", source: "Goldin Auctions" },
-      { price: 9600.00, date: "12 days ago", source: "Card Ladder" },
-      { price: 9300.00, date: "18 days ago", source: "PWCC Vault" },
-      { price: 9500.00, date: "25 days ago", source: "eBay Sold" }
-    ]
-  },
-  {
-    id: "ebay-102",
-    player: "Victor Wembanyama",
-    year: 2023,
-    brand: "Panini Prizm",
-    type: "Silver Prizm Rookie",
-    graded: true,
-    grader: "PSA",
-    grade: 10.0,
-    title: "2023 Panini Prizm Victor Wembanyama Silver Prizm #136 Rookie PSA 10",
-    currentPrice: 580.00,
-    shippingCost: 5.00,
-    fmv: 850.00,
-    endTimeSeconds: 1080,
-    imageUrl: "https://images.unsplash.com/photo-1608245365831-2451976ab5a4?auto=format&fit=crop&w=600&q=80",
-    url: "https://www.ebay.com/itm/111000102",
-    comps: [
-      { price: 875.00, date: "2 days ago", source: "eBay Sold" },
-      { price: 840.00, date: "4 days ago", source: "Card Ladder" },
-      { price: 860.00, date: "9 days ago", source: "eBay Sold" },
-      { price: 830.00, date: "14 days ago", source: "eBay Sold" },
-      { price: 845.00, date: "20 days ago", source: "PWCC Vault" }
-    ]
-  },
-  {
-    id: "ebay-105",
-    player: "Luka Doncic",
-    year: 2018,
-    brand: "Panini Prizm",
-    type: "Silver Prizm Rookie",
-    graded: true,
-    grader: "PSA",
-    grade: 10.0,
-    title: "2018-19 Luka Doncic Panini Prizm Silver Prizm RC #280 PSA 10 GEM MINT",
-    currentPrice: 690.00,
-    shippingCost: 5.00,
-    fmv: 980.00,
-    endTimeSeconds: 2700,
-    imageUrl: "https://images.unsplash.com/photo-1505666287802-931dc83948e9?auto=format&fit=crop&w=600&q=80",
-    url: "https://www.ebay.com/itm/111000105",
-    comps: [
-      { price: 990.00, date: "5 days ago", source: "eBay Sold" },
-      { price: 960.00, date: "11 days ago", source: "PWCC Vault" },
-      { price: 1000.00, date: "18 days ago", source: "Card Ladder" },
-      { price: 970.00, date: "27 days ago", source: "eBay Sold" },
-      { price: 980.00, date: "1 month ago", source: "eBay Sold" }
-    ]
-  }
-];
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const POLL_MS = 15000;
+
+function mapDeal(d) {
+  return {
+    id: d.deal_id,
+    rawId: d.listing.listing_id,
+    player: d.listing.card.player_name,
+    year: d.listing.card.year,
+    brand: d.listing.card.brand,
+    type: d.listing.card.card_type,
+    graded: d.listing.card.graded,
+    grader: d.listing.card.grader || '',
+    grade: d.listing.card.grade || '',
+    title: d.listing.title,
+    currentPrice: d.listing.current_price,
+    shippingCost: d.listing.shipping_cost || 0,
+    fmv: d.fair_market_value,
+    discount: d.discount,
+    maxBid: d.max_bid,
+    confidence: d.comps?.confidence || 'none',
+    nComps: d.comps?.n || 0,
+    cv: d.comps?.cv ?? 0,
+    endTime: d.listing.end_time ? new Date(d.listing.end_time) : null,
+    imageUrl: d.listing.image_url,
+    url: d.listing.url,
+    explainer: d.explainer,
+    status: d.status,
+    comps: (d.comps?.samples || []).map((c) => ({
+      price: c.sale_price,
+      date: new Date(c.sale_date).toLocaleDateString(),
+      source: c.source,
+      url: c.url,
+    })),
+  };
+}
+
+function secondsLeft(endTime) {
+  if (!endTime) return null;
+  return Math.max(0, Math.floor((endTime.getTime() - Date.now()) / 1000));
+}
 
 export default function App() {
-  const [deals, setDeals] = useState(INITIAL_SCOUT_DEALS);
-  const [targetMargin, setTargetMargin] = useState(0.28); // Default 28% margin as requested by Cooper!
-  const [maxBidLimit, setMaxBidLimit] = useState(5000); // Default Whale limit
-  const [dailyBudget, setDailyBudget] = useState(5000); // Default daily budget
-  const [budgetPreset, setBudgetPreset] = useState("whale"); // "cooper", "whale", "custom"
+  const [deals, setDeals] = useState([]);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [targetMargin, setTargetMargin] = useState(0.30);
+  const [maxBidLimit, setMaxBidLimit] = useState(5000);
+  const [dailyBudget, setDailyBudget] = useState(5000);
+  const [budgetPreset, setBudgetPreset] = useState('whale');
   const [selectedDealComps, setSelectedDealComps] = useState(null);
-  const [monitoredRoster, setMonitoredRoster] = useState([
-    "LeBron James", "Michael Jordan", "Stephen Curry", "Victor Wembanyama", "Kobe Bryant", "Luka Doncic", "Nikola Jokic", 
-    "Anthony Edwards"
-  ]);
-  const [newPlayerInput, setNewPlayerInput] = useState("");
+  const [monitoredRoster, setMonitoredRoster] = useState([]);
+  const [newPlayerInput, setNewPlayerInput] = useState('');
   const [sniperLogs, setSniperLogs] = useState([]);
-  const [sniperTimer, setSniperTimer] = useState(24);
-  const [sniperState, setSniperState] = useState("waiting");
+  const [, setTick] = useState(0);
 
-  const applyBudgetPreset = (preset) => {
-    setBudgetPreset(preset);
-    if (preset === "cooper") {
-      setMaxBidLimit(300);
-      setDailyBudget(300);
-      addLog("👦 Preset Activated: Cooper Mode ($300 limit per card).");
-    } else if (preset === "whale") {
-      setMaxBidLimit(5000);
-      setDailyBudget(5000);
-      addLog("🐋 Preset Activated: Whale Hunter Mode ($5,000 limit per card).");
+  const addLog = useCallback((message) => {
+    const time = new Date().toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    setSniperLogs((prev) => [{ time, message }, ...prev].slice(0, 50));
+  }, []);
+
+  const fetchDeals = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/deals`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setDeals(data.map(mapDeal));
+      setError(null);
+    } catch (err) {
+      setError(`Could not reach backend at ${API_BASE}. Is the server running?`);
     }
-  };
-
-  // Dynamic live API fetching from our Google Cloud Run Service!
-  useEffect(() => {
-    async function fetchLiveDeals() {
-      try {
-        const response = await fetch("https://card-scout-540307999570.us-east1.run.app/api/deals");
-        if (response.ok) {
-          const cloudData = await response.json();
-          if (cloudData && cloudData.length > 0) {
-            // Map Cloud Run Python objects to React component attributes
-            const mappedDeals = cloudData.map(d => ({
-              id: d.listing.listing_id,
-              player: d.listing.card.player_name,
-              year: d.listing.card.year,
-              brand: d.listing.card.brand,
-              type: d.listing.card.card_type,
-              graded: d.listing.card.graded,
-              grader: d.listing.card.grader || "PSA",
-              grade: d.listing.card.grade || 10,
-              title: d.listing.title,
-              currentPrice: d.listing.current_price,
-              shippingCost: d.listing.shipping_cost,
-              fmv: d.fair_market_value,
-              endTimeSeconds: d.listing.listing_id === "ebay-103" ? sniperTimer : 300,
-              imageUrl: d.listing.image_url || "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=600",
-              url: d.listing.url,
-              explainer: d.explainer || null,
-              comps: [
-                { price: d.fair_market_value * 1.02, date: "3 days ago", source: "eBay Sold" },
-                { price: d.fair_market_value * 0.98, date: "8 days ago", source: "Card Ladder" },
-                { price: d.fair_market_value * 1.00, date: "15 days ago", source: "PWCC Vault" }
-              ]
-            }));
-            setDeals(mappedDeals);
-            addLog("📡 API Sync: Live deals fetched from Google Cloud Run!");
-          }
-        }
-      } catch (err) {
-        console.warn("Could not connect to Cloud Run API, falling back to local comps sandbox.", err);
-      }
-    }
-
-    fetchLiveDeals();
-    // Poll Cloud Run every 10 seconds to keep dashboard fully synced
-    const apiInterval = setInterval(fetchLiveDeals, 10000);
-    return () => clearInterval(apiInterval);
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSniperTimer(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          handleSniperExecution();
-          return 0;
-        }
-        
-        // Revised to target exactly 3 seconds!
-        if (prev === 10) {
-          setSniperState("priming");
-          addLog("⚠️ Sniper Agent engaged: Target bid locked. Awaiting last 3 seconds.");
-        } else if (prev === 5) {
-          setSniperState("sniping");
-          addLog("⚡ Sniper Agent ready. Initializing secure socket connection...");
-        } else if (prev === 3) {
-          addLog(`💰 Submitting sniper bid of $4,935.00 at exactly T-3s!`);
-        }
-        return prev - 1;
-      });
+    fetchDeals();
+    const id = setInterval(fetchDeals, POLL_MS);
+    return () => clearInterval(id);
+  }, [fetchDeals]);
 
-      setDeals(prev => prev.map(deal => {
-        if (deal.id === "ebay-103") {
-          return { ...deal, endTimeSeconds: Math.max(0, sniperTimer - 1) };
-        }
-        return { ...deal, endTimeSeconds: Math.max(0, deal.endTimeSeconds - 1) };
-      }));
-    }, 1000);
+  // tick once per second so countdowns update
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [sniperTimer]);
+  // pull roster from watchlist (best-effort; if API isn't ready, leave blank)
+  useEffect(() => {
+    fetch(`${API_BASE}/config`).catch(() => {});
+    const players = new Set(deals.map((d) => d.player));
+    setMonitoredRoster(Array.from(players));
+  }, [deals]);
 
-  const addLog = (message) => {
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setSniperLogs(prev => [{ time, message }, ...prev]);
+  useEffect(() => {
+    deals.forEach((d) => {
+      if (!d.endTime) return;
+      const s = secondsLeft(d.endTime);
+      if (s === 60 && d.status === 'approved') {
+        addLog(`⏰ ${d.player} ${d.year} ${d.brand} closes in 60s — open eBay and place max bid $${d.maxBid.toFixed(2)}.`);
+      }
+    });
+  }, [deals, addLog]);
+
+  const applyBudgetPreset = (preset) => {
+    setBudgetPreset(preset);
+    if (preset === 'cooper') {
+      setMaxBidLimit(300); setDailyBudget(300);
+      addLog('👦 Cooper mode: $300 cap per card.');
+    } else if (preset === 'whale') {
+      setMaxBidLimit(5000); setDailyBudget(5000);
+      addLog('🐋 Whale mode: $5,000 cap per card.');
+    }
   };
 
-  const handleSniperExecution = () => {
-    setSniperState("secured");
-    addLog("✅ WINNER! 1986 Michael Jordan Rookie Card PSA 8 secured at $4,175.00! (Est. profit margin: $2,000.00!)");
-    setDeals(prev => prev.map(d => {
-      if (d.id === "ebay-103") {
-        return { ...d, currentPrice: 4175.00, status: "secured" };
-      }
-      return d;
-    }));
+  const refresh = async () => {
+    setRefreshing(true);
+    addLog('🔄 Manual refresh: scanning eBay…');
+    try {
+      const r = await fetch(`${API_BASE}/refresh`, { method: 'POST' });
+      const json = await r.json();
+      addLog(`✅ Scan complete: ${json.scanned} listings, ${json.approved} approved.`);
+      await fetchDeals();
+    } catch {
+      addLog('❌ Refresh failed; check backend logs.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const setDealStatus = async (deal, status) => {
+    try {
+      await fetch(`${API_BASE}/deals/${deal.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      addLog(`📝 ${deal.player} ${deal.year} → ${status}`);
+      fetchDeals();
+    } catch {
+      addLog('❌ Status change failed.');
+    }
+  };
+
+  const queueSnipe = async (deal) => {
+    try {
+      const r = await fetch(`${API_BASE}/deals/${deal.id}/snipe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_bid: deal.maxBid }),
+      });
+      const json = await r.json();
+      addLog(`🎯 Snipe queued for ${deal.player}. ${json.instructions || ''}`);
+      fetchDeals();
+    } catch {
+      addLog('❌ Snipe queue failed.');
+    }
   };
 
   const addPlayerToRoster = (e) => {
     e.preventDefault();
-    if (newPlayerInput.trim() && !monitoredRoster.includes(newPlayerInput.trim())) {
-      setMonitoredRoster([...monitoredRoster, newPlayerInput.trim()]);
-      addLog(`📈 Added ${newPlayerInput.trim()} to monitored roster.`);
-      setNewPlayerInput("");
+    const v = newPlayerInput.trim();
+    if (v && !monitoredRoster.includes(v)) {
+      setMonitoredRoster([...monitoredRoster, v]);
+      addLog(`📈 ${v} added locally. (Persist to backend by editing watchlist.yaml.)`);
+      setNewPlayerInput('');
     }
   };
-
   const removePlayerFromRoster = (player) => {
-    setMonitoredRoster(monitoredRoster.filter(p => p !== player));
-    addLog(`📉 Removed ${player} from monitored roster.`);
+    setMonitoredRoster(monitoredRoster.filter((p) => p !== player));
+    addLog(`📉 ${player} removed locally. (Edit watchlist.yaml to persist.)`);
   };
 
-  const approvedDeals = deals.filter(d => {
-    const maxBidCeiling = d.fmv * (1 - targetMargin) - d.shippingCost;
-    return d.currentPrice <= maxBidCeiling && d.currentPrice <= maxBidLimit && d.currentPrice <= dailyBudget;
-  });
+  const dealsForCard = deals.map((d) => ({ ...d, endTimeSeconds: secondsLeft(d.endTime) ?? 0 }));
+  const approvedCount = dealsForCard.filter((d) => d.status === 'approved' || d.status === 'snipe_queued').length;
 
   return (
     <div className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto">
-      <Header rosterCount={monitoredRoster.length} activeDealsCount={approvedDeals.length} />
+      <Header rosterCount={monitoredRoster.length} activeDealsCount={approvedCount} />
+
+      {error && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4" />
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Controls 
+        <Controls
           targetMargin={targetMargin}
           setTargetMargin={setTargetMargin}
           maxBidLimit={maxBidLimit}
@@ -279,19 +218,39 @@ export default function App() {
               <TrendingUp className="h-5 w-5 text-indigo-400" />
               Live Arbitrage Opportunities
             </h2>
-            <div className="text-xs text-slate-400">Showing {deals.length} deals in rotation</div>
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-slate-400">{dealsForCard.length} listings tracked</div>
+              <button
+                type="button"
+                onClick={refresh}
+                disabled={refreshing}
+                className="text-xs px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                Scan now
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col gap-6">
+            {dealsForCard.length === 0 && !error && (
+              <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-sm text-slate-400">
+                No deals yet. Hit <strong>Scan now</strong> to pull live auctions from eBay.
+                If you haven't set <code>EBAY_CLIENT_ID</code> / <code>EBAY_CLIENT_SECRET</code> in <code>.env</code>, do that first.
+              </div>
+            )}
             <AnimatePresence>
-              {deals.map(deal => (
-                <DealCard 
+              {dealsForCard.map((deal) => (
+                <DealCard
                   key={deal.id}
                   deal={deal}
                   targetMargin={targetMargin}
                   maxBidLimit={maxBidLimit}
                   dailyBudget={dailyBudget}
                   onSelectComps={setSelectedDealComps}
+                  onApprove={() => setDealStatus(deal, 'approved')}
+                  onReject={() => setDealStatus(deal, 'rejected')}
+                  onSnipe={() => queueSnipe(deal)}
                 />
               ))}
             </AnimatePresence>
@@ -299,11 +258,11 @@ export default function App() {
         </div>
       </div>
 
-      <SniperShell sniperState={sniperState} sniperLogs={sniperLogs} />
+      <SniperShell sniperState="waiting" sniperLogs={sniperLogs} />
 
       <AnimatePresence>
         {selectedDealComps && (
-          <CompsModal 
+          <CompsModal
             selectedDealComps={selectedDealComps}
             targetMargin={targetMargin}
             onClose={() => setSelectedDealComps(null)}

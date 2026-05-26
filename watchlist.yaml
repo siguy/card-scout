@@ -1,0 +1,58 @@
+# Players Card Scout watches. Edit this file freely.
+# Each player gets a list of search queries that get sent to eBay.
+# Keep queries specific — broad queries return noise that wrecks the comp engine.
+
+players:
+  # Current NBA
+  - name: Nikola Jokic
+    queries:
+      - "Nikola Jokic Prizm Rookie PSA"
+      - "Nikola Jokic 2015 Panini Prizm"
+  - name: Luka Doncic
+    queries:
+      - "Luka Doncic Prizm Silver Rookie PSA"
+      - "Luka Doncic 2018 Panini Prizm Rookie"
+  - name: Shai Gilgeous-Alexander
+    queries:
+      - "Shai Gilgeous-Alexander Prizm Rookie PSA"
+      - "SGA 2018 Prizm Rookie"
+  - name: Victor Wembanyama
+    queries:
+      - "Victor Wembanyama Prizm Silver Rookie PSA"
+      - "Victor Wembanyama 2023 Prizm Rookie"
+  - name: Jayson Tatum
+    queries:
+      - "Jayson Tatum Prizm Silver Rookie PSA"
+      - "Jayson Tatum 2017 Prizm Rookie"
+  - name: Giannis Antetokounmpo
+    queries:
+      - "Giannis Antetokounmpo Prizm Rookie PSA"
+      - "Giannis 2013 Prizm Rookie"
+  - name: Stephen Curry
+    queries:
+      - "Stephen Curry Topps Chrome Rookie Refractor PSA"
+      - "Stephen Curry 2009 Topps Chrome"
+  - name: LeBron James
+    queries:
+      - "LeBron James 2003 Topps Chrome Rookie PSA"
+      - "LeBron James Topps Chrome Refractor Rookie"
+
+  # All-time greats
+  - name: Michael Jordan
+    queries:
+      - "Michael Jordan 1986 Fleer Rookie PSA"
+      - "Michael Jordan Fleer Rookie"
+  - name: Kobe Bryant
+    queries:
+      - "Kobe Bryant 1996 Topps Chrome Rookie PSA"
+      - "Kobe Bryant Topps Chrome Refractor Rookie"
+  - name: Magic Johnson
+    queries:
+      - "Magic Johnson 1980 Topps Rookie PSA"
+  - name: Larry Bird
+    queries:
+      - "Larry Bird 1980 Topps Rookie PSA"
+  - name: Shaquille O'Neal
+    queries:
+      - "Shaquille O'Neal 1992 Topps Rookie PSA"
+      - "Shaq 1992 Stadium Club Rookie"

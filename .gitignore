@@ -26,3 +26,11 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Card Scout local DB
+data/
+
