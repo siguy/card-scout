@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { Clock, Info, ArrowUpRight, Award, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Info, ArrowUpRight, Award, ChevronDown, ChevronUp, Check, X, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function DealCard({ 
-  deal, 
-  targetMargin, 
-  maxBidLimit, 
-  dailyBudget, 
-  onSelectComps 
+export default function DealCard({
+  deal,
+  targetMargin,
+  maxBidLimit,
+  dailyBudget,
+  onSelectComps,
+  onApprove,
+  onReject,
+  onSnipe,
 }) {
   const [showExplainer, setShowExplainer] = useState(true);
-  const maxBidCeiling = deal.fmv * (1 - targetMargin) - deal.shippingCost;
+  // Prefer backend-computed max_bid; fall back to client formula for older payloads.
+  const maxBidCeiling = deal.maxBid ?? (deal.fmv * (1 - targetMargin) - deal.shippingCost);
   
   // Dynamic Budget validation
   const isMarginApproved = deal.currentPrice <= maxBidCeiling;
@@ -73,9 +77,23 @@ export default function DealCard({
             ? "EXCEEDS DAILY BUDGET" 
             : "WATCH LIST"}
         </span>
-        {deal.status === "secured" && (
+        {deal.status === "snipe_queued" && (
           <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-            SECURED
+            SNIPE QUEUED
+          </span>
+        )}
+        {deal.status === "won" && (
+          <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            WON
+          </span>
+        )}
+        {deal.confidence && (
+          <span className={`text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full border ${
+            deal.confidence === 'high' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              : deal.confidence === 'low' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              : 'bg-slate-700/40 text-slate-400 border-slate-600/30'
+          }`}>
+            {deal.confidence} conf · n={deal.nComps}
           </span>
         )}
       </div>
@@ -198,15 +216,42 @@ export default function DealCard({
               View Comps
             </button>
             
-            <a 
-              href={deal.url} 
-              target="_blank" 
+            <a
+              href={deal.url}
+              target="_blank"
               rel="noopener noreferrer"
               className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20 hover:text-indigo-200 rounded-2xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-all"
             >
               eBay Link
               <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
+            {onReject && deal.status !== 'rejected' && (
+              <button
+                type="button"
+                onClick={onReject}
+                className="bg-white/5 text-slate-400 border border-white/10 hover:bg-rose-500/10 hover:text-rose-300 rounded-2xl px-3 py-2 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <X className="h-3.5 w-3.5" /> Reject
+              </button>
+            )}
+            {onApprove && deal.status === 'detected' && deal.confidence === 'high' && (
+              <button
+                type="button"
+                onClick={onApprove}
+                className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-2xl px-3 py-2 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Check className="h-3.5 w-3.5" /> Approve
+              </button>
+            )}
+            {onSnipe && (deal.status === 'approved') && (
+              <button
+                type="button"
+                onClick={onSnipe}
+                className="bg-indigo-500 text-white border border-indigo-400 hover:bg-indigo-400 rounded-2xl px-3 py-2 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Target className="h-3.5 w-3.5" /> Queue Snipe
+              </button>
+            )}
           </div>
         </div>
       </div>
